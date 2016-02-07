@@ -243,10 +243,10 @@ func (b Bucket) ForEach(folders [][]byte, f func(k, v bytesp.Slice) error) error
 
 // Get retrieves the value for a key in the bucket. f is not called if
 // the key does not exist or if the key is a nested bucket.
-func (b Bucket) Value(k [][]byte, f func(bytesp.Slice) error) {
-	b.OpenBucket(k[:len(k)-1], func(b Bucket) error {
+func (b Bucket) Value(k [][]byte, f func(bytesp.Slice) error) error {
+	return b.OpenBucket(k[:len(k)-1], func(b Bucket) error {
 		if v := b.Bucket.Get(k[len(k)-1]); v != nil {
-			f(bytesp.Slice(v))
+			return errorsp.WithStacks(f(bytesp.Slice(v)))
 		}
 		return nil
 	})
