@@ -1,3 +1,6 @@
+// Package bh provides some helper classes for convenience of using github.com/boltdb/bolt package.
+// All wrapper classes will use their friend wrapper classes whenever possible.
+// All returned errors are with call stackes using github.com/golangplus/errors.
 package bh
 
 import (
@@ -10,18 +13,22 @@ import (
 	"github.com/boltdb/bolt"
 )
 
+// A wrapper to *bolt.DB.
 type DB struct {
 	*bolt.DB
 }
 
+// A wrapper to *bolt.Tx.
 type Tx struct {
 	*bolt.Tx
 }
 
+// A wrapper to *bolt.Bucket.
 type Bucket struct {
 	*bolt.Bucket
 }
 
+// A wrapper to *bolt.Cursor.
 type Cursor struct {
 	*bolt.Cursor
 }
