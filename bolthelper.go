@@ -191,6 +191,23 @@ func (tx Tx) Value(k [][]byte, f func(v bytesp.Slice) error) error {
 	})
 }
 
+// Updates fetches the current value and updates to a new value. If a nil
+// value is returned by f, the item is deleted.
+func (tx Tx) Update(k [][]byte, f func(bytesp.Slice) (bytesp.Slice, error)) error {
+	b, err := tx.CreateBucketIfNotExists(k[:len(k)-1])
+	if err != nil {
+		return err
+	}
+	v, err := f(b.Bucket.Get(k[len(k)-1]))
+	if err != nil {
+		return errorsp.WithStacks(err)
+	}
+	if v == nil {
+		return errorsp.WithStacks(b.Bucket.Delete(k[len(k)-1]))
+	}
+	return errorsp.WithStacks(b.Bucket.Put(k[len(k)-1], v))
+}
+
 // Bucket retrieves a nested bucket by name. Returns nil if the bucket
 // does not exist. The bucket instance is only valid for the lifetime of
 // the transaction.
