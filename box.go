@@ -1,15 +1,20 @@
 package bh
 
 import (
+	"errors"
 	"sync"
+
+	"github.com/golangplus/errors"
 )
+
+var ErrBoxDataPathNotSpecified = errors.New("DataPath func of RefCountBox was not specified")
 
 // RefCountBox is a structure maintaining a reference-count guarded instance of DB.
 type RefCountBox struct {
 	sync.Mutex
 
 	// The path to the bolt database file.
-	DataPath string
+	DataPath func() string
 
 	// Used to open a bolt DB. If not specified, bh.Open with 0644 mode and
 	// default options will be used.
@@ -25,15 +30,18 @@ func (b *RefCountBox) Alloc() (DB, error) {
 	defer b.Unlock()
 
 	if b.db.DB == nil {
+		if b.DataPath == nil {
+			return DB{}, errorsp.WithStacks(ErrBoxDataPathNotSpecified)
+		}
 		var db DB
 		var err error
 		if b.OpenFunc == nil {
-			db, err = Open(b.DataPath, 0644, nil)
+			db, err = Open(b.DataPath(), 0644, nil)
 		} else {
-			db, err = b.OpenFunc(b.DataPath)
+			db, err = b.OpenFunc(b.DataPath())
 		}
 		if err != nil {
-			return DB{}, err
+			return DB{}, errorsp.WithStacks(err)
 		}
 		b.db, b.count = db, 0
 	}

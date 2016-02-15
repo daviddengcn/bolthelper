@@ -6,6 +6,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/golangplus/errors"
 	"github.com/golangplus/testing/assert"
 )
 
@@ -13,7 +14,9 @@ func TestRefCountBox_Basic(t *testing.T) {
 	fn := path.Join(os.TempDir(), "TestRefCountBox.bolt")
 	assert.NoError(t, os.RemoveAll(fn))
 
-	b := RefCountBox{DataPath: fn}
+	b := RefCountBox{
+		DataPath: func() string { return fn },
+	}
 	db, err := b.Alloc()
 	assert.NoError(t, err)
 	assert.ValueShould(t, "db.DB", db.DB, db.DB != nil, "is nil")
@@ -32,7 +35,7 @@ func TestRefCountBox_OpenFunc(t *testing.T) {
 	openFuncCalled := false
 
 	b := RefCountBox{
-		DataPath: fn,
+		DataPath: func() string { return fn },
 		OpenFunc: func(path string) (DB, error) {
 			openFuncCalled = true
 			return Open(path, 0644, nil)
@@ -50,6 +53,18 @@ func TestRefCountBox_OpenFunc(t *testing.T) {
 	assert.ValueShould(t, "b.db.DB", b.db.DB, b.db.DB == nil, "is not nil")
 }
 
+func TestRefCountBox_UnsetDataPath(t *testing.T) {
+	fn := path.Join(os.TempDir(), "TestRefCountBox.bolt")
+	assert.NoError(t, os.RemoveAll(fn))
+
+	b := RefCountBox{}
+	db, err := b.Alloc()
+	assert.Equal(t, "err", errorsp.Cause(err), ErrBoxDataPathNotSpecified)
+	assert.ValueShould(t, "db.DB", db.DB, db.DB == nil, "is not nil")
+	assert.ValueShould(t, "b.db.DB", b.db.DB, b.db.DB == nil, "is not nil")
+	assert.Equal(t, "b.count", b.count, 0)
+}
+
 func TestRefCountBox_OpenFuncFailed(t *testing.T) {
 	fn := path.Join(os.TempDir(), "TestRefCountBox.bolt")
 	assert.NoError(t, os.RemoveAll(fn))
@@ -58,14 +73,14 @@ func TestRefCountBox_OpenFuncFailed(t *testing.T) {
 	failedErr := errors.New("failed")
 
 	b := RefCountBox{
-		DataPath: fn,
+		DataPath: func() string { return fn },
 		OpenFunc: func(path string) (DB, error) {
 			openFuncCalled = true
 			return DB{}, failedErr
 		},
 	}
 	db, err := b.Alloc()
-	assert.Equal(t, "err", err, failedErr)
+	assert.Equal(t, "err", errorsp.Cause(err), failedErr)
 	assert.ValueShould(t, "db.DB", db.DB, db.DB == nil, "is not nil")
 	assert.ValueShould(t, "b.db.DB", b.db.DB, b.db.DB == nil, "is not nil")
 	assert.Equal(t, "b.count", b.count, 0)
