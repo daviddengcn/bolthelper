@@ -61,3 +61,21 @@ func (b *RefCountBox) Free() {
 		b.db = DB{}
 	}
 }
+
+func (b *RefCountBox) View(f func(Tx) error) error {
+	db, err := b.Alloc()
+	if err != nil {
+		return errorsp.WithStacks(err)
+	}
+	return db.View(f)
+}
+
+func (b *RefCountBox) Update(f func(Tx) error) error {
+	db, err := b.Alloc()
+	if err != nil {
+		return errorsp.WithStacks(err)
+	}
+	defer b.Free()
+
+	return db.Update(f)
+}

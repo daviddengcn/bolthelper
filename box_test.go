@@ -1,11 +1,13 @@
 package bh
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path"
 	"testing"
 
+	"github.com/golangplus/bytes"
 	"github.com/golangplus/errors"
 	"github.com/golangplus/testing/assert"
 )
@@ -85,4 +87,29 @@ func TestRefCountBox_OpenFuncFailed(t *testing.T) {
 	assert.ValueShould(t, "b.db.DB", b.db.DB, b.db.DB == nil, "is not nil")
 	assert.Equal(t, "b.count", b.count, 0)
 	assert.True(t, "openFuncCalled", openFuncCalled)
+}
+
+func TestRefCountBox_UpdateView(t *testing.T) {
+	fn := path.Join(os.TempDir(), "TestRefCountBox_UpdateView.bolt")
+	assert.NoError(t, os.RemoveAll(fn))
+
+	b := RefCountBox{
+		DataPath: func() string { return fn },
+	}
+	k := bytes.Split([]byte("a.b"), []byte("."))
+	v := "hello"
+	assert.NoErrorOrDie(t, b.Update(func(tx Tx) error {
+		return tx.Put(k, []byte(v))
+	}))
+	assert.Equal(t, "b.count", b.count, 0)
+	assert.ValueShould(t, "b.db.DB", b.db.DB, b.db.DB == nil, "is not nil")
+
+	found := false
+	assert.NoErrorOrDie(t, b.View(func(tx Tx) error {
+		return tx.Value(k, func(bs bytesp.Slice) error {
+			found = true
+			assert.Equal(t, "bs", string(v), string(bs))
+			return nil
+		})
+	}))
 }
