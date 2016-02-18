@@ -4,6 +4,8 @@
 package bh
 
 import (
+	"bytes"
+	"encoding/gob"
 	"io"
 	"os"
 
@@ -179,6 +181,15 @@ func (tx Tx) Put(k [][]byte, v []byte) error {
 	return errorsp.WithStacks(b.Bucket.Put(k[len(k)-1], v))
 }
 
+// PutGob serialize v using gob and put it into the key.
+func (tx Tx) PutGob(k [][]byte, v interface{}) error {
+	var bs bytesp.Slice
+	if err := gob.NewEncoder(&bs).Encode(&v); err != nil {
+		return errorsp.WithStacksAndMessage(err, "encoding %+v failed", v)
+	}
+	return tx.Put(k, bs)
+}
+
 // Value tries to get a value from the transaction. If the key does not
 // exist, the f is not called and nil is return.
 func (tx Tx) Value(k [][]byte, f func(v bytesp.Slice) error) error {
@@ -188,6 +199,17 @@ func (tx Tx) Value(k [][]byte, f func(v bytesp.Slice) error) error {
 			return nil
 		}
 		return errorsp.WithStacks(f(bytesp.Slice(v)))
+	})
+}
+
+// GobValue retrieves a value written by PutGob and decode it.
+func (tx Tx) GobValue(k [][]byte, f func(interface{}) error) error {
+	return tx.Value(k, func(bs bytesp.Slice) error {
+		var v interface{}
+		if err := gob.NewDecoder(&bs).Decode(&v); err != nil {
+			return errorsp.WithStacksAndMessage(err, "decoding %d bytes buffer failed", len(bs))
+		}
+		return f(v)
 	})
 }
 
@@ -276,6 +298,17 @@ func (b Bucket) Value(k [][]byte, f func(bytesp.Slice) error) error {
 	})
 }
 
+// GobValue retrieves a value written by PutGob and decode it.
+func (b Bucket) GobValue(k [][]byte, f func(interface{}) error) error {
+	return b.Value(k, func(bs bytesp.Slice) error {
+		var v interface{}
+		if err := gob.NewDecoder(&bs).Decode(&v); err != nil {
+			return errorsp.WithStacksAndMessage(err, "decoding %d bytes buffer failed", len(bs))
+		}
+		return f(v)
+	})
+}
+
 // NextSequence returns an autoincrementing integer for the bucket.
 func (b Bucket) NextSequence() (uint64, error) {
 	s, err := b.Bucket.NextSequence()
@@ -288,9 +321,20 @@ func (b Bucket) NextSequence() (uint64, error) {
 // created from a read-only transaction, if the key is blank, if the key
 // is too large, or if the value is too large.
 func (b Bucket) Put(k [][]byte, v []byte) error {
-	return b.OpenBucket(k[:len(k)-1], func(b Bucket) error {
-		return errorsp.WithStacks(b.Bucket.Put(k[len(k)-1], v))
-	})
+	bb, err := b.CreateBucketIfNotExists(k[:len(k)-1])
+	if err != nil {
+		return errorsp.WithStacksAndMessage(err, "CreateBucketIfNotExists %q failed", string(bytes.Join(k, []byte(" "))))
+	}
+	return errorsp.WithStacks(bb.Bucket.Put(k[len(k)-1], v))
+}
+
+// PutGob serialize v using gob and put it into the key.
+func (b Bucket) PutGob(k [][]byte, v interface{}) error {
+	var bs bytesp.Slice
+	if err := gob.NewEncoder(&bs).Encode(&v); err != nil {
+		return errorsp.WithStacksAndMessage(err, "encoding %+v failed", v)
+	}
+	return b.Put(k, bs)
 }
 
 // Tx returns the tx of the bucket.
