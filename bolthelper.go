@@ -154,6 +154,17 @@ func (tx Tx) ForEach(folders [][]byte, f func(Bucket, bytesp.Slice, bytesp.Slice
 	})
 }
 
+// ForEach iterates over all key values of a folder, decode non-nil values using gob.
+func (tx Tx) ForEachGob(folders [][]byte, f func(Bucket, bytesp.Slice, interface{}) error) error {
+	return tx.ForEach(folders, func(b Bucket, k, bs bytesp.Slice) error {
+		var v interface{}
+		if err := gob.NewDecoder(&bs).Decode(&v); err != nil {
+			return errorsp.WithStacksAndMessage(err, "decoding %d bytes value for key %q failed", len(bs), string(k))
+		}
+		return errorsp.WithStacks(f(b, k, v))
+	})
+}
+
 // Rollback closes the transaction and ignores all previous updates.
 // Read-only transactions must be rolled back and not committed.
 func (tx Tx) Rollback() error {
@@ -232,7 +243,8 @@ func (tx Tx) Update(k [][]byte, f func(bytesp.Slice) (bytesp.Slice, error)) erro
 
 // Bucket retrieves a nested bucket by name. Returns nil if the bucket
 // does not exist. The bucket instance is only valid for the lifetime of
-// the transaction.
+// the transaction. folders can be empty, in which case the b itself is
+// sent to f.
 func (b Bucket) OpenBucket(folders [][]byte, f func(Bucket) error) error {
 	bb := b.Bucket
 	for _, fld := range folders {
@@ -282,8 +294,23 @@ func (b Bucket) Delete(k [][]byte) error {
 func (b Bucket) ForEach(folders [][]byte, f func(k, v bytesp.Slice) error) error {
 	return b.OpenBucket(folders, func(b Bucket) error {
 		return errorsp.WithStacks(b.Bucket.ForEach(func(k, v []byte) error {
-			return errorsp.WithStacks(f(bytesp.Slice(k), bytesp.Slice(k)))
+			return errorsp.WithStacks(f(bytesp.Slice(k), bytesp.Slice(v)))
 		}))
+	})
+}
+
+// ForEachGob iterates each values of a folder, returns a Gob decoded object.
+func (b Bucket) ForEachGob(folders [][]byte, f func(bytesp.Slice, interface{}) error) error {
+	return b.ForEach(folders, func(k, bs bytesp.Slice) error {
+		if bs == nil {
+			// Ignore sub folders.
+			return nil
+		}
+		var v interface{}
+		if err := gob.NewDecoder(&bs).Decode(&v); err != nil {
+			return errorsp.WithStacksAndMessage(err, "decoding %d bytes buffer for key %q failed", len(bs), string(k))
+		}
+		return f(k, v)
 	})
 }
 
@@ -323,7 +350,7 @@ func (b Bucket) NextSequence() (uint64, error) {
 func (b Bucket) Put(k [][]byte, v []byte) error {
 	bb, err := b.CreateBucketIfNotExists(k[:len(k)-1])
 	if err != nil {
-		return errorsp.WithStacksAndMessage(err, "CreateBucketIfNotExists %q failed", string(bytes.Join(k, []byte(" "))))
+		return errorsp.WithStacksAndMessage(err, "CreateBucketIfNotExists %q failed", string(bytes.Join(k[:len(k)-1], []byte(" "))))
 	}
 	return errorsp.WithStacks(bb.Bucket.Put(k[len(k)-1], v))
 }
