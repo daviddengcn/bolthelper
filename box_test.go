@@ -112,4 +112,6 @@ func TestRefCountBox_UpdateView(t *testing.T) {
 			return nil
 		})
 	}))
+	assert.Equal(t, "b.count", b.count, 0)
+	assert.ValueShould(t, "b.db.DB", b.db.DB, b.db.DB == nil, "is not nil")
 }

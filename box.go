@@ -67,6 +67,8 @@ func (b *RefCountBox) View(f func(Tx) error) error {
 	if err != nil {
 		return errorsp.WithStacks(err)
 	}
+	defer b.Free()
+
 	return db.View(f)
 }
 
