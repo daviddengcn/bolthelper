@@ -12,7 +12,7 @@ import (
 	"github.com/golangplus/bytes"
 	"github.com/golangplus/errors"
 
-	"github.com/boltdb/bolt"
+	"github.com/coreos/bbolt"
 )
 
 // A wrapper to *bolt.DB.
